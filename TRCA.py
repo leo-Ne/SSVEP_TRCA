@@ -4,18 +4,29 @@
 # Code version: 1.0
 
 import numpy as np
-import scipy
+from scipy.io import loadmat, savemat
 import mne
 
+
 class TRCA:
-    def __init__(self, _eegFile:str):
-        self.eegData = np.load(_eegFile)
+    def __init__(self, _eegFile:str, Freq_Phase=None):
+        """
+        Initialize the class TRCA and load eeg data;
+        Load train data only with one block;
+        """
+        self.eegData, self.freq_phase = self.loadData(_eegFile,Freq_Phase) 
         chans, smpls, trials = np.shape(self.eegData)
         self.shape = np.array([chans, smpls, trials], np.int32)
         # some other para 
         self.W = np.zeros([smpls], np.float32)
         self.models = None
         pass
+
+    def loadData(self, eegFile:str, Freq_Phase=None):
+        eegData = loadmat(eegFile)
+        if Freq_Phase not None:
+            freq_phase = loadmat(Freq_Phase)
+        return eegData, freq_phase
 
     def trca():
         """
@@ -60,6 +71,7 @@ class TRCA:
 
 
 def testUnit():
+#    session = TRCA(
     pass
 
 
