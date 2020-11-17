@@ -2,6 +2,10 @@
 # date: 2020/11/11
 # python version: 3.8
 # Code version: 1.0
+"""
+SSVEP EEG form Tsing database: www.bci.med.tsing.edu.cn/download.html
+EEG Data: [Electrode index, Time points, Target indx, Block index]
+"""
 
 import numpy as np
 from scipy.io import loadmat, savemat
@@ -9,32 +13,43 @@ import mne
 
 
 class TRCA:
-    def __init__(self, _eegFile:str, Freq_Phase=None):
+    def __init__(self):
         """
         Initialize the class TRCA and load eeg data;
         Load train data only with one block;
         """
-        self.eegData, self.freq_phase = self.loadData(_eegFile,Freq_Phase) 
-        chans, smpls, trials = np.shape(self.eegData)
+        # Initilization with None and 0
+        self.eegData, self.freq_phase = None, None
+        chans, smpls, trials = 0, 0, 0
         self.shape = np.array([chans, smpls, trials], np.int32)
         # some other para 
         self.W = np.zeros([smpls], np.float32)
         self.models = None
+        print('Initialization Done!')
         pass
 
-    def loadData(self, eegFile:str, Freq_Phase=None):
+    def loadData(self, eegFile:str, Freq_Phase:str, block=0):
+        """
+        Create a dictory variable by loading *.mat file which include eeg data and labels
+        """
         eegData = loadmat(eegFile)
-        if Freq_Phase not None:
-            freq_phase = loadmat(Freq_Phase)
+        eegData = np.array(eegData['data'], np.float32)
+
+        freq_phase = loadmat(Freq_Phase)
+        freq_phase = np.array([freq_phase['freqs'], freq_phase['phases']], np.float32)
+        freq_phase = freq_phase[:, 0, :].T
+        print(r'freq_phase shape:', '\t', np.shape(freq_phase))
+        print(r'SSVEP EEG shape:', '\t', np.shape(eegData))
         return eegData, freq_phase
 
-    def trca():
+    def trca(self):
         """
         Firstly, calculate the CovMax S.
         Secondly, calculate the coefficients W by Rayleigh-Ritz method.
         """
         eegData = self.eegData.copy()
         chans, smpls, trials = self.shape
+        print("shape:\t", chans, smpls, trials)
         S = np.zeros([chans])
         for trial_i in range(trials):
             x1 = eegData[:, :, trial_i]
@@ -71,7 +86,13 @@ class TRCA:
 
 
 def testUnit():
-#    session = TRCA(
+    dirName       = r'./tsing/'
+    eegFile       = r'S6.mat'
+    labelFile     = r'Freq_Phase.mat'
+    dataFileName  = dirName + eegFile
+    labelFileName = dirName + labelFile
+    session       = TRCA()
+    session.loadData(dataFileName, labelFileName, block=0)
     pass
 
 
