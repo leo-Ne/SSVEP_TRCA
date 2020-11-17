@@ -20,10 +20,10 @@ class TRCA:
         """
         # Initilization with None and 0
         self.eegData, self.freq_phase = None, None
-        chans, smpls, trials = 0, 0, 0
-        self.shape = np.array([chans, smpls, trials], np.int32)
+        chans, smpls, trials, block   = 0, 0, 0, 0
+        self.shape                    = np.array([chans, smpls, trials, block], np.int32)
         # some other para 
-        self.W = np.zeros([smpls], np.float32)
+        self.W      = np.zeros([smpls], np.float32)
         self.models = None
         print('Initialization Done!')
         pass
@@ -40,6 +40,8 @@ class TRCA:
         freq_phase = freq_phase[:, 0, :].T
         print(r'freq_phase shape:', '\t', np.shape(freq_phase))
         print(r'SSVEP EEG shape:', '\t', np.shape(eegData))
+        self.eegData, self.freq_phase = eegData, freq_phase
+        self.shape                    = eegData.shape
         return eegData, freq_phase
 
     def trca(self):
