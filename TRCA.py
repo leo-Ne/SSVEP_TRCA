@@ -23,7 +23,7 @@ class TRCA:
         chans, smpls, trials, block   = 0, 0, 0, 0
         self.shape                    = np.array([chans, smpls, trials, block], np.int32)
         # some other para 
-        self.W      = np.zeros([smpls], np.float32)
+        self.W      = np.zeros([chans], np.float32)
         self.models = None
         pass
 
