@@ -6,11 +6,10 @@
 SSVEP EEG form Tsing database: www.bci.med.tsing.edu.cn/download.html
 EEG Data: [Electrode index, Time points, Target indx, Block index]
 """
-
 import numpy as np
 from scipy.io import loadmat, savemat
+import matplotlib.pyplot as plt
 import mne
-
 
 class TRCA:
     def __init__(self):
@@ -22,27 +21,20 @@ class TRCA:
         self.eegData, self.freq_phase = None, None
         chans, smpls, trials, block   = 0, 0, 0, 0
         self.shape                    = np.array([chans, smpls, trials, block], np.int32)
-        # some other para 
-        self.W      = np.zeros([chans], np.float32)
-        self.models = None
+        # para about Models
+        self.W = np.zeros([trials, chans])
+        self.models = np.zeros([trials, smpls])
         pass
 
-    def loadData(self, eegFile:str, labelFile:str, block=0):
+    def loadData(self, eegFile:str, labelFile:str, testBlock=-1):
         """
         Create a dictory variable by loading *.mat file which include eeg data and labels
         """
         eegData = loadmat(eegFile)
         eegData = np.array(eegData['data'], np.float32)
-
         freq_phase = loadmat(labelFile)
         freq_phase = np.array([freq_phase['freqs'], freq_phase['phases']], np.float32)
         freq_phase = freq_phase[:, 0, :].T
-        print(r'freq_phase shape:', '\t', np.shape(freq_phase))
-        print(r'SSVEP EEG shape:', '\t', np.shape(eegData))
-        print('labels:')
-        print('\tfreqs: \tphases: \t')
-        for i, item in enumerate(freq_phase):
-            print('label'+str(i)+'\t', item[0], '\t', item[1])
         self.eegData, self.freq_phase = eegData, freq_phase
         self.shape                    = eegData.shape
         self.W                        = np.zeros([self.shape[2]], np.float32)
@@ -67,37 +59,67 @@ class TRCA:
             xi = xi - np.mean(xi, axis=1)[:, None]
             for trial_j in range(trial_i+1, trials):
                 xj  = trainData[:, :, trial_j]
-                xj  = x2 - np.mean(xj, axis = 1)[:, None]
+                xj  = xj - np.mean(xj, axis = 1)[:, None]
                 S  += np.matmul(xi, xj.T) + np.matmul(xi, xj.T)
         ## end for
         ## Those code is working in a ineffective way! change it!
 
-        UX = np.reshape(trainData,[chans, smpls*trials])
-        UX = UX - np.mean(UX, axis=1)[:, None]
-        Q = np.matmul(UX, UX.T)
+        UX    = np.reshape(trainData,[chans, smpls*trials])
+        UX    = UX - np.mean(UX, axis = 1)[:, None]
+        Q     = np.matmul(UX, UX.T)
         Q_inv = np.linalg.inv(Q)
-        QS = np.matmul(Q_inv, S)
+        QS    = np.matmul(Q_inv, S)
         # cal w 
         eigenvalues, eigenvectors = np.linalg.eig(QS)
-        maxEigenvealue_i = np.argwhere(eigenvalues==np.max(eigenvalues))
-        w = eigenvectors[maxEigenvealue_i][0, 0]
-        w = w[:, None]
-        print("W : \t", w.T)
-        print("W shape :\t", np.shape(w))
-        self.W = w
+        maxEigenvealue_i          = np.argwhere(eigenvalues == np.max(eigenvalues))
+        w      = eigenvectors[maxEigenvealue_i][0, 0]
+        w      = w[:, None]
         return w
        
-    def model(self):
+    def train(self, objFile:str, labelFile:str):
         """
         By using the training data and W, function create models for classification.
         This step to decrease the computational requirements when TRCA works in hard device.
         """
-        self.models = models
-        return models
+        print("----------------- In Function train() -----------------")
+        ######################load data#################################
+        if self.eegData is None:
+            self.loadData(eegFile=objFile, labelFile=labelFile)
+            print("Loading eeg Data...")
+            eegData  = self.eegData.copy()
+        else:
+            eegData = self.eegData.copy()
+        ######################cal WX####################################
+        chans, smpls, _, _ = self.shape
+        labels_length      = np.shape(self.freq_phase)[0]
+        print("chans:\t", chans, "smpls:\t", smpls)
+        print('label_length:\t', labels_length)
+        W = np.zeros([labels_length, chans], np.complex64)
+        for label in range(labels_length-38):
+            w           = self.trca(label = label)
+            W[label, :] = np.squeeze(w)[:]
+            print("\rIn %d/40 template calculating" % (label+1), flush=True, end='')
+        print('\nW shape:\t', W.shape)
+        # models
+        # cal average value of each signal in each trial and chanel of all blocks
+        mean_val  = np.mean(eegData, axis=1)[:, None, :, :]
+        eegData   = eegData - mean_val
+        sumSignal = np.sum(eegData, axis=3)
+        print('eegData shape:\t', eegData.shape)
+        print('sumSignal shape:\t', sumSignal.shape)
+        WX = np.zeros([labels_length, smpls], np.complex64)
+        for i in range(labels_length):
+            w     = W[i][None, :]
+            x     = sumSignal[:, :, i]
+            wx    = np.matmul(w, x)
+            WX[i] = wx[:]
+        self.models = WX
+
+        return WX
 
     def classification(self, testData:str, model=None):
         if model is None:
-            self.model()
+            self.train()
         pass
 
 
@@ -108,9 +130,10 @@ def testUnit():
     dataFileName  = dirName + eegFile
     labelFileName = dirName + labelFile
     session       = TRCA()
-    session.loadData(dataFileName, labelFileName, block=0)
-    session.trca(label=0)
-    print('testUnit Passed!')
+    session.loadData(dataFileName, labelFileName)
+#    session.trca(label=0)
+    session.train(objFile=dataFileName, labelFile=labelFileName)
+    print('\n\ntestUnit Passed!')
     pass
 
 
