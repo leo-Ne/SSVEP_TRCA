@@ -123,21 +123,23 @@ class TRCA:
         ######################cal WX####################################
         chans, smpls, _, _ = self.trainData.shape
         labels_length      = np.shape(self.freq_phase)[0]
-        print("chans:\t", chans, "smpls:\t", smpls)
-        print('label_length:\t', labels_length)
+#        print("chans:\t", chans, "smpls:\t", smpls)
+#        print('label_length:\t', labels_length)
         W = np.zeros([labels_length, chans], np.complex64)
         for label in range(labels_length):
             w           = self.trca(label = label)
             W[label, :] = np.squeeze(w)[:]
             print("\rIn %d/40 template calculating" % (label+1), flush=True, end='')
-        print('\nW shape:\t', W.shape)
+        print('')
+#        print('\nW shape:\t', W.shape)
+        self.W = W
         # models
         # cal average value of each signal in each trial and chanel of all blocks
         mean_val  = np.mean(trainData, axis=1)[:, None, :, :]
         trainData   = trainData - mean_val
         sumSignal = np.sum(trainData, axis=3)
-        print('trainData shape:\t', trainData.shape)
-        print('sumSignal shape:\t', sumSignal.shape)
+#        print('trainData shape:\t', trainData.shape)
+#        print('sumSignal shape:\t', sumSignal.shape)
         WX = np.zeros([labels_length, smpls], np.complex64)
         for i in range(labels_length):
             w     = W[i][None, :]
@@ -153,12 +155,33 @@ class TRCA:
         """
         Classification() is to test generalization of TRCA model by using 5-1 floder.  
         """
-        if self.models is None:
-            print("There is not models! Please train it!")
-            return -1
-        _, _, _, blocks = self.shape
+#        if self.models is None:
+#            print("There is not models! Please train it!")
+#            return -1
+#        _, _, _, blocks = self.shape
+        blocks = 6
+        testNum = 40
+        print("->->->->test models<-<-<-<-")
         for testBlk in range(blocks):
             self.loadData(testBlock=testBlk)
+            self.train()
+            w = self.W
+            WX = self.models
+            testData = self.testData - np.mean(self.testData, axis=1)[:, None, :]
+            outputLabels = np.zeros([testNum], np.int32)
+            for test_i in range(testNum):
+                data_t = testData[:, :, test_i]
+                WT = np.matmul(w, data_t)
+                coefficience = np.zeros([testNum])
+                for i, wt in enumerate(WT):
+                    wx = WX[i]
+                    wt = np.abs(wt)
+                    wx = np.abs(wx)
+                    coefficienceMatrix = np.corrcoef(wt, wx)
+                    coefficience[i] = coefficienceMatrix[0, 1]
+                outputLabels[test_i] = np.argwhere(coefficience==np.max(coefficience))[:, :]
+            print("outputLabels\t", outputLabels)
+        print("->->->->test models end<-<-<-<-")
 
         return 1
 
@@ -171,10 +194,10 @@ def testUnit():
     dataFileName  = dirName + eegFile
     labelFileName = dirName + labelFile
     session       = TRCA(_objFile=dataFileName, _labelFile=labelFileName)
-    session.loadData(testBlock=1)
-    session.loadData(testBlock=2)
+#    session.loadData(testBlock=1)
+#    session.loadData(testBlock=2)
 #    session.trca(label=0)
-    session.train()
+#    session.train()
     session.classification()
     print('testUnit Passed!')
     print("-----------------   Test Unit End        -----------------")
