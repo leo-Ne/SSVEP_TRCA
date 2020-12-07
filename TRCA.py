@@ -58,7 +58,6 @@ class TRCA():
             print('Data cut by setting!')
         nBegin = np.int32(fs * tBegin)
         nEnd   = np.int32(fs * tEnd)
-#        tUseW  = np.array([nBegin, nEnd], np.int32)
         dataUse = data[:, nBegin:nEnd, :, :]
         self._eegData = dataUse.copy()
         del data, nBegin, nEnd, dataUse
