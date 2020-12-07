@@ -6,17 +6,32 @@
 # Filename     :TRCA.py
 # Description  : 
 **************************************'''
+from __future__ import print_function
+import sys
 
 import numpy as np
 from scipy.io import loadmat, savemat
-from scipy import signal
+from scipy import signal as SIG
 import matplotlib.pyplot as plt
 import mne
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+#errInfo = r'Error: <filter para in SSVEPFilter() is not defined>'
+#sys.exit(errInfo)
 
 class TRCA():
     def __init__(self, _Subject=None, fs=250):
         self._eegData   = None
-        self._dataShape = np.zeros([5],np.int32)
+        dataDescription = {
+                'shape':    None,
+                'nChannel': None,
+                'nSample':  None,
+                'nEvent':   None,
+                'nTrial':   None,
+                'nBlock':   None
+                }
+        self._dataDescription= dataDescription.copy()
         # [nChennel, nSample, nEvent, nTrial, nBlock]
         self._trainData = None
         self._testData  = None
@@ -27,6 +42,7 @@ class TRCA():
         self._begin     = 0.14
         self._tuse      = 1.0
         self._fs        = fs
+        del dataDescription
         pass
 
     def loadData(self, filename):
@@ -39,6 +55,13 @@ class TRCA():
             self._eegData = dataUse.copy()
             # filter
             print('Data was firstly loaded!')
+            shape = np.shape(dataUse)
+            self._dataDescription['shape']    = shape
+            self._dataDescription['nChannel'] = shape[0]
+            self._dataDescription['nSample']  = shape[1]
+            self._dataDescription['nEvent']   = shape[2]
+            self._dataDescription['nTrial']   = shape[2]
+            self._dataDescription['nBlock']   = shape[3]
         else:
             print('Data was already loaded!')
         del data, dataUse
@@ -63,17 +86,32 @@ class TRCA():
         del data, nBegin, nEnd, dataUse
         return  
     
-    def SSVEPFilter(self, b=None, a=None):
+    def SSVEPFilter(self, filterType=0):
+        """
+        type
+          0: nomal trca
+          1: enhance trca
+        """
         data = self._eegData.copy()
-        # process
-        self.trainData = None
-        self.testData = None
-        del data
+        fs = self._fs
+        dataFiltered = None
+        if filterType == 0:
+            Wn = [6.0, 90.0]
+            Wn = np.array(Wn, np.float64) / (fs/2)
+            b, a = SIG.cheby1(4, 0.1, Wn,btype="bandpass",analog=False,output='ba')
+            dataFiltered = SIG.lfilter(b, a, data, axis=1)
+            del b, a ,Wn
+        elif filterType == 1:
+            sys.exit("Error:<filterType=1 means use Enhance trca by adding filter bank, to which Leo was lazy!!!>")
+        self._trainData = dataFiltered[:, :, :, :-1]
+        self._testData = dataFiltered[:, :, :, -1][:, :, :, None]
+        del data, dataFiltered
         return 
 
     def trca1(self):
-        data = self.trainData.copy()
+        trainData = self._trainData.copy()
         #  process
+          
         self.W = None
         del data
         return 
@@ -113,12 +151,10 @@ def unitTest():
     # Unit test
     sub6 = r'./tsing/S6.mat'
     session = TRCA(_Subject=6,fs=250)
-    print("eegData shape:\t", np.shape(session._eegData))
     session.loadData(filename=sub6)
-    print("eegData shape:\t", np.shape(session._eegData))
-    print("tBegin tEnd fs:\t", session._begin, session._tuse, session._fs)
     session.cutData()
     print("eegData shape:\t", np.shape(session._eegData))
+    session.SSVEPFilter()
     pass
 
 if __name__ == "__main__":
