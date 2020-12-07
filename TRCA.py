@@ -13,26 +13,38 @@ from scipy import signal
 import matplotlib.pyplot as plt
 import mne
 
-class trca():
-    def __init__(self, _Subject=None):
-        self.eegData   = None
-        self.dataShape = np.zeros([5],np.int32)
+class TRCA():
+    def __init__(self, _Subject=None, begin=0.14, tuse=1.0, fs=250):
+        self._eegData   = None
+        self._dataShape = np.zeros([5],np.int32)
         # [nChennel, nSample, nEvent, nTrial, nBlock]
-        self.trainData = None
-        self.testData  = None
-        self.W         = None
-        self.result    = None
+        self._trainData = None
+        self._testData  = None
+        self._W         = None
+        self._result    = None
+        self.label      = None      # Equal to event
+        # TRCA Setting
+        self._begin     = begin
+        self._tuse      = tuse
+        self.fs         = fs
         pass
 
     def loadData(self, filename):
-        data = loadmat(filename)
         # process
-        self.eegData = data.copy()
-        del data
+        if self._eegData is None:
+            data = loadmat(filename)['data']
+            chnls = np.array([47, 53, 54, 55, 56, 57, 60, 61, 62], np.int32)
+            dataUse = data[chnls, :, :, :].copy()
+            # filter
+            del data
+        else:
+            dataUse = self._eegData.copy()
+        self._eegData = dataUse.copy()
+        del dataUse
         return
     
-    def SSVEPFilter(self):
-        data = self.eegData.copy()
+    def SSVEPFilter(self, b=None, a=None):
+        data = self._eegData.copy()
         # process
         self.trainData = None
         self.testData = None
@@ -62,8 +74,8 @@ class trca():
         del trainData, testData, W
         return 
 
-    def classifier(self)
-        data = self.eegData.copy()
+    def classifier(self):
+        data = self._eegData.copy()
         trainData = None
         testData = None
         # process
@@ -79,9 +91,15 @@ class trca():
 
 def unitTest():
     # Unit test
-    
+    sub6 = r'./tsing/S6.mat'
+    session = TRCA(_Subject=6, begin=0.14, tuse=1,fs=250)
+    session.loadData(filename=sub6)
+    session.loadData(filename=sub6)
+    session.loadData(filename=sub6)
+    session.loadData(filename=sub6)
+    session.loadData(filename=sub6)
     pass
 
-if if __name__ == "__main__":
+if __name__ == "__main__":
     unitTest()
-    return
+    pass
