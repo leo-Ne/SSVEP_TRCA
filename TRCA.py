@@ -37,7 +37,7 @@ class TRCA():
         self._testData  = None
         self._W         = None
         self._result    = None
-        self.label      = None      # Equal to event
+        self._label     = None      # Equal to event
         # TRCA Setting
         self._begin     = 0.14
         self._tuse      = 1.0
