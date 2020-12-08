@@ -1,7 +1,7 @@
 #! /use/bin/env python
 ''' **************************************
 # Author       :leo-Ne
-# Last modified:2020-12-06 16:32
+# Last modified:2020-12-08 16:16
 # Email        : leo@email.com
 # Filename     :TRCA.py
 # Description  : 
@@ -10,6 +10,7 @@ from __future__ import print_function
 import sys
 
 import numpy as np
+from numpy import linalg as LA
 from scipy.io import loadmat, savemat
 from scipy import signal as SIG
 import matplotlib.pyplot as plt
@@ -109,11 +110,37 @@ class TRCA():
         return 
 
     def trca1(self):
-        trainData = self._trainData.copy()
-        #  process
-          
-        self.W = None
-        del data
+        trainData      = self._trainData.copy()
+        trainDataShape = np.shape(trainData)
+        nChannels      = trainDataShape[0]
+        nSamples       = trainDataShape[1]
+        nEvents        = trainDataShape[2]
+        nBlocks        = trainDataShape[3]
+        nTrials        = nBlocks * 1    # 1 trails for each task in each block.
+        # process
+        W         = np.zeros([nEvents, nChannels], np.float64)
+        Q         = np.zeros([nChannels, nChannels], np.float64)
+        S         = np.zeros_like(Q)
+        trainData = trainData - np.mean(trainData, axis = 1)[:, None, :, :]
+        for nEvent in range(nEvents):
+            data = trainData[:, :, nEvent, :]
+            UX   = np.reshape(data,[nChannels, nSamples * nTrials], order='C')
+            Q    = np.matmul(UX, UX.T) / nTrials
+            S    = np.zeros_like(Q)
+            for xi in range(nTrials):
+                for xj in range(nTrials):
+                    if xi != xj:
+                        data_i  = data[:, :, xi]
+                        data_j  = data[:, :, xj]
+                        S      += np.matmul(data_i, data_j.T)
+            S = S / (nTrials * (nTrials-1))  
+            eigenvalues, eigenvectors = LA.eig(np.matmul(LA.inv(Q), S))
+            w_index = np.max(np.where(eigenvalues == np.max(eigenvalues)))
+            W[nEvent, :] = eigenvectors[:, w_index].T
+            print("w_index: ", nEvent, '\t', w_index)
+        self._W = W.copy()
+        del trainData, nChannels, nSamples, nEvents, nTrials, trainDataShape, W, Q, S
+        del UX, data, data_i, data_j, eigenvalues, eigenvectors, w_index 
         return 
 
     def trca2(self):
@@ -127,8 +154,7 @@ class TRCA():
     def LDA(self):
         trainData = self.trainData.copy()
         testData  = self.testData.copy()
-        W = self.W.copy()
-        # process
+        W = self._W.copy()
         del trainData, testData, W
         return 
 
@@ -155,6 +181,7 @@ def unitTest():
     session.cutData()
     print("eegData shape:\t", np.shape(session._eegData))
     session.SSVEPFilter()
+    session.trca1()
     pass
 
 if __name__ == "__main__":
