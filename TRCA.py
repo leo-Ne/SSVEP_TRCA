@@ -1,7 +1,7 @@
 #! /use/bin/env python
 ''' **************************************
 # Author       :leo-Ne
-# Last modified:2020-12-08 16:16
+# Last modified:2020-12-09 21:13
 # Email        : leo@email.com
 # Filename     :TRCA.py
 # Description  : 
@@ -24,8 +24,9 @@ def eprint(*args, **kwargs):
 
 class TRCA():
     def __init__(self, _Subject=None, fs=250):
-        self._Sub       = _Subject
-        self._eegData   = None
+        self._Sub         = _Subject
+        self._eegData     = None
+        self._eegFiltered = None
         dataDescription = {
                 'shape':    None,
                 'nChannel': None,
@@ -102,14 +103,15 @@ class TRCA():
         fs           = self._fs
         dataFiltered = None
         if filterType == 0:
-            Wn           = [6.0, 90.0]
+            Wn           = [7.0, 90.0]
             Wn           = np.array(Wn, np.float64) / (fs/2)
             b, a         = SIG.cheby1(4, 0.1, Wn,btype  = "bandpass",analog = False,output = 'ba')
-            dataFiltered = SIG.lfilter(b, a, data, axis = 1)
+#            dataFiltered = SIG.lfilter(b, a, data, axis = 1)
+            dataFiltered = SIG.filtfilt(b, a, data, axis = 1)
             del b, a ,Wn
         elif filterType == 1:
             sys.exit("Error:<filterType=1 means use Enhance trca by adding filter bank, to which Leo was lazy!!!>")
-        self._eegData = dataFiltered.copy()
+        self._eegFiltered = dataFiltered.copy()
         del data, dataFiltered
         return
     
@@ -120,7 +122,7 @@ class TRCA():
         trainBlock = list(range(nBlocks))
         trainBlock.remove(testBlock)
         trainBlock      = np.array(trainBlock, np.int32)
-        eegData         = self._eegData.copy()
+        eegData         = self._eegFiltered.copy()
         self._testData  = eegData[:, :, :, testBlock][:, :, :, None]
         self._trainData = eegData[:, :, :, trainBlock]
         return 
@@ -187,9 +189,7 @@ class TRCA():
         del result
         return 
 
-    def train(self, tBegin=-1, tUse=-1, tCut=0.14, filterType=0, testBlock=0):
-        self.cutData(tBegin,tUse,tCut)
-        self.SSVEPFilter(filterType=0)
+    def train(self,testBlock=0):
         self.testSet(testBlock=testBlock)
         self.trca1()
         return
@@ -201,14 +201,14 @@ class TRCA():
         accuracy      = tureNum / np.size(result)
         tBegin = self._begin + self._tCut
         tEnd  = tBegin + self._tuse
-        print('Period of data:\t %.2f~%.2fs'% (tBegin, tEnd))
-        print("tureNum:\t %d/%d" % (tureNum, 40))
-        print("accuracy:\t %.2f%%" % (accuracy * 100))
-        del result, correctResult, tureNum, accuracy, tBegin, tEnd
-        return 
+        del result, correctResult, tBegin, tEnd
+        return tureNum, accuracy
 
 def unitTest():
     # Unit test
+    """
+    Test code logic
+    """
     sub        = r'./tsing/S1.mat'
     tBegin     = 3.0
     tCut       = 0.14
@@ -218,11 +218,55 @@ def unitTest():
     
     session = TRCA(_Subject=6,fs=250)
     session.loadData(filename=sub)
-    session.train(tBegin,tUse,tCut,filterType,testBlock)
+    session.cutData(tBegin,tUse,tCut)
+    session.SSVEPFilter(filterType)
+
+    session.train(testBlock)
     session.classifier()
+
     session.output()
     pass
 
+def CVTest(SubNum=None):
+    """
+    Cross Validation for testing algorithmic ability.
+    """
+    if SubNum == None:
+        sub = r'./tsing/S2.mat'
+    else:
+        sub = r'./tsing/S'+str(SubNum)+r'.mat'
+    tBegin     = 1.0
+    tCut       = 0.14
+    tUse       = 1.0
+    filterType = 0
+    print('Subject:%s. Period of data:\t %.2f~%.2fs'% (sub, tBegin+tCut, tBegin+tCut+tUse))
+
+    session = TRCA(_Subject=6,fs=250)
+    session.loadData(filename=sub)
+    session.cutData(tBegin,tUse,tCut)
+    session.SSVEPFilter(filterType)
+    averAcc = 0.0
+    for loop in range(6):
+        print('In loop: %d, test set: %d.' % (loop, loop), end=' ')
+        session.train(testBlock=loop)
+        session.classifier()
+        tureNum, accuracy = session.output()
+        print("tureNum:%d/%d, accuracy:%.2f%%" % (tureNum, 40, accuracy * 100))
+        averAcc += accuracy
+    print("Average accuracy:%.2f%%" % (100 * averAcc / 6))
+    del sub
+    return
+
+def allCVTest():
+    """
+    Do CV by using all data of subjects.
+    """
+    SubNum = [1, 2, 4, 6, 7]
+    print("================================================================")
+    for subNum in SubNum:
+        CVTest(SubNum=subNum)
+        print("================================================================")
+
 if __name__ == "__main__":
-    unitTest()
+    allCVTest()
     pass
