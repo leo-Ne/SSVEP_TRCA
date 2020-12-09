@@ -8,8 +8,11 @@ Design a learner to create a classifier by using TRCA and LDA.
 * trca.SSVEPFilter()
 * trca.trca1()
 * trca.trca2()
-* trca.LDA()
 * trca.train()
+>> self.cutData()  
+>> self.SSVEPFilter()  
+>> self.testSet()  
+>> self.trca()  
 * trca.classifier()
 * trca.output()
 * TRCA.unitTest()  "In TRCA.py file, unitTest() is not a method of trca class, but a test function for trca class."

@@ -24,6 +24,7 @@ def eprint(*args, **kwargs):
 
 class TRCA():
     def __init__(self, _Subject=None, fs=250):
+        self._Sub       = _Subject
         self._eegData   = None
         dataDescription = {
                 'shape':    None,
@@ -38,11 +39,12 @@ class TRCA():
         self._trainData = None
         self._testData  = None
         self._W         = None
-        self._result    = None
         self._label     = None      # Equal to event
+        self._result    = None
         # TRCA Setting
-        self._begin     = 2.14
-        self._tuse      = 2.0
+        self._begin     = 2.0
+        self._tCut      = 0.14
+        self._tuse      = 1.0
         self._fs        = fs
         del dataDescription
         pass
@@ -69,19 +71,21 @@ class TRCA():
         del data, dataUse
         return
 
-    def cutData(self, tBegin=-1, tuse=-1):
+    def cutData(self, tBegin=-1, tuse=-1, tCut=0.14):
         fs = self._fs
         data = self._eegData.copy()
         if tBegin == -1 or tuse == -1 :
-            tBegin = self._begin
+            tBegin = self._begin + self._tCut
             tEnd   = tBegin + self._tuse
             print('Data cut by default!')
         else:
-            tEnd   = tBegin + tuse
             self._begin = tBegin
             self._tuse  = tuse
+            self._tCut  = tCut
+            tBegin = tBegin + tCut
+            tEnd   = tBegin + tuse
             print('Data cut by setting!')
-        nBegin = np.int32(fs * tBegin)
+        nBegin = np.int32(fs * (tBegin))
         nEnd   = np.int32(fs * tEnd)
         dataUse = data[:, nBegin:nEnd, :, :]
         self._eegData = dataUse.copy()
@@ -105,9 +109,20 @@ class TRCA():
             del b, a ,Wn
         elif filterType == 1:
             sys.exit("Error:<filterType=1 means use Enhance trca by adding filter bank, to which Leo was lazy!!!>")
-        self._trainData = dataFiltered[:, :, :, :-1]
-        self._testData  = dataFiltered[:, :, :, -1][:, :, :, None]
+        self._eegData = dataFiltered.copy()
         del data, dataFiltered
+        return
+    
+    def testSet(self, testBlock=0):
+        nBlocks         = self._dataDescription['nBlock']
+        if testBlock not in range(nBlocks):
+            sys.exit('Error:<The test block setting is out range!!!>')
+        trainBlock = list(range(nBlocks))
+        trainBlock.remove(testBlock)
+        trainBlock      = np.array(trainBlock, np.int32)
+        eegData         = self._eegData.copy()
+        self._testData  = eegData[:, :, :, testBlock][:, :, :, None]
+        self._trainData = eegData[:, :, :, trainBlock]
         return 
 
     def trca1(self):
@@ -145,20 +160,18 @@ class TRCA():
 
     def trca2(self):
         pass
+    
 
-    def train():
-        # Step of train model may execute in the TRCA step.  
-        # This function may be not used.
-        pass
+    def classifier(self):
+        trainData   = self._trainData.copy()
+        nEvents     = self._dataDescription['nEvent']
+        testData    = self._testData.copy()
+        nTestBlock  = np.shape(testData)[3]
+        W           = self._W.copy()
+        temp_X      = np.mean(trainData, axis = 3)
 
-    def LDA(self):
-        trainData = self._trainData.copy()
-        testData  = self._testData.copy()
-        nTestBlock = np.shape(testData)[3]
-        W = self._W.copy()
-        temp_X = np.mean(trainData, axis=3)
-        nEvents = self._dataDescription['nEvent']
         coeffiience = np.zeros([nEvents], np.float32)
+        result      = np.zeros([nEvents * nTestBlock], np.int32)
         for test_idx in  range(nEvents * nTestBlock):
             test_trial = testData[:, :, test_idx, 0]
             for i, w in enumerate(W):
@@ -166,38 +179,48 @@ class TRCA():
                 test_i = np.dot(w, test_trial)
                 temp_i = np.dot(w, temp_X[:, :, i])
                 coeffiience[i], _ = pearsonr(test_i[0], temp_i[0])
-            label = np.max(np.where(coeffiience == np.max(coeffiience)))
-            print(label, end='\t')
-        print('\n')
-
-        del trainData, testData, W, temp_X
+            
+            label            = np.max(np.where(coeffiience == np.max(coeffiience)))
+            result[test_idx] = label
+        del trainData, nEvents, testData,nTestBlock, W, temp_X, coeffiience, test_trial, test_i, temp_i, label
+        self._result = result.copy()
+        del result
         return 
 
-    def classifier(self):
-        data = self._eegData.copy()
-        trainData = None
-        testData = None
-        # process
-        self.result = None
-        del data, trainData, testData
-        return 
+    def train(self, tBegin=-1, tUse=-1, tCut=0.14, filterType=0, testBlock=0):
+        self.cutData(tBegin,tUse,tCut)
+        self.SSVEPFilter(filterType=0)
+        self.testSet(testBlock=testBlock)
+        self.trca1()
+        return
 
     def output(self):
-        result = self.result.copy()
-        # output 
-        del result
+        result        = self._result.copy()
+        correctResult = np.arange(0,40,1,dtype    = np.int32)
+        tureNum       = np.size(np.where((result == correctResult) == True))
+        accuracy      = tureNum / np.size(result)
+        tBegin = self._begin + self._tCut
+        tEnd  = tBegin + self._tuse
+        print('Period of data:\t %.2f~%.2fs'% (tBegin, tEnd))
+        print("tureNum:\t %d/%d" % (tureNum, 40))
+        print("accuracy:\t %.2f%%" % (accuracy * 100))
+        del result, correctResult, tureNum, accuracy, tBegin, tEnd
         return 
 
 def unitTest():
     # Unit test
-    sub6 = r'./tsing/S6.mat'
+    sub        = r'./tsing/S1.mat'
+    tBegin     = 3.0
+    tCut       = 0.14
+    tUse       = 1.0
+    filterType = 0
+    testBlock  = 1
+    
     session = TRCA(_Subject=6,fs=250)
-    session.loadData(filename=sub6)
-    session.cutData()
-    print("eegData shape:\t", np.shape(session._eegData))
-    session.SSVEPFilter()
-    session.trca1()
-    session.LDA()
+    session.loadData(filename=sub)
+    session.train(tBegin,tUse,tCut,filterType,testBlock)
+    session.classifier()
+    session.output()
     pass
 
 if __name__ == "__main__":
