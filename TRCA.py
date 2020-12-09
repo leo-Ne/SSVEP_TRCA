@@ -103,11 +103,11 @@ class TRCA():
         fs           = self._fs
         dataFiltered = None
         if filterType == 0:
-            Wn           = [7.0, 90.0]
+            Wn           = [6.0, 90.0]
             Wn           = np.array(Wn, np.float64) / (fs/2)
             b, a         = SIG.cheby1(4, 0.1, Wn,btype  = "bandpass",analog = False,output = 'ba')
-#            dataFiltered = SIG.lfilter(b, a, data, axis = 1)
-            dataFiltered = SIG.filtfilt(b, a, data, axis = 1)
+            dataFiltered = SIG.lfilter(b, a, data, axis = 1)
+#            dataFiltered = SIG.filtfilt(b, a, data, axis = 1)
             del b, a ,Wn
         elif filterType == 1:
             sys.exit("Error:<filterType=1 means use Enhance trca by adding filter bank, to which Leo was lazy!!!>")
@@ -162,7 +162,6 @@ class TRCA():
 
     def trca2(self):
         pass
-    
 
     def classifier(self):
         trainData   = self._trainData.copy()
@@ -205,9 +204,8 @@ class TRCA():
         return tureNum, accuracy
 
 def unitTest():
-    # Unit test
     """
-    Test code logic
+    Test code logic.
     """
     sub        = r'./tsing/S1.mat'
     tBegin     = 3.0
