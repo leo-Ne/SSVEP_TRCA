@@ -13,6 +13,7 @@ import numpy as np
 from numpy import linalg as LA
 from scipy.io import loadmat, savemat
 from scipy import signal as SIG
+from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 import mne
 
@@ -40,8 +41,8 @@ class TRCA():
         self._result    = None
         self._label     = None      # Equal to event
         # TRCA Setting
-        self._begin     = 0.14
-        self._tuse      = 1.0
+        self._begin     = 2.14
+        self._tuse      = 2.0
         self._fs        = fs
         del dataDescription
         pass
@@ -93,19 +94,19 @@ class TRCA():
           0: nomal trca
           1: enhance trca
         """
-        data = self._eegData.copy()
-        fs = self._fs
+        data         = self._eegData.copy()
+        fs           = self._fs
         dataFiltered = None
         if filterType == 0:
-            Wn = [6.0, 90.0]
-            Wn = np.array(Wn, np.float64) / (fs/2)
-            b, a = SIG.cheby1(4, 0.1, Wn,btype="bandpass",analog=False,output='ba')
-            dataFiltered = SIG.lfilter(b, a, data, axis=1)
+            Wn           = [6.0, 90.0]
+            Wn           = np.array(Wn, np.float64) / (fs/2)
+            b, a         = SIG.cheby1(4, 0.1, Wn,btype  = "bandpass",analog = False,output = 'ba')
+            dataFiltered = SIG.lfilter(b, a, data, axis = 1)
             del b, a ,Wn
         elif filterType == 1:
             sys.exit("Error:<filterType=1 means use Enhance trca by adding filter bank, to which Leo was lazy!!!>")
         self._trainData = dataFiltered[:, :, :, :-1]
-        self._testData = dataFiltered[:, :, :, -1][:, :, :, None]
+        self._testData  = dataFiltered[:, :, :, -1][:, :, :, None]
         del data, dataFiltered
         return 
 
@@ -137,7 +138,6 @@ class TRCA():
             eigenvalues, eigenvectors = LA.eig(np.matmul(LA.inv(Q), S))
             w_index = np.max(np.where(eigenvalues == np.max(eigenvalues)))
             W[nEvent, :] = eigenvectors[:, w_index].T
-            print("w_index: ", nEvent, '\t', w_index)
         self._W = W.copy()
         del trainData, nChannels, nSamples, nEvents, nTrials, trainDataShape, W, Q, S
         del UX, data, data_i, data_j, eigenvalues, eigenvectors, w_index 
@@ -152,10 +152,25 @@ class TRCA():
         pass
 
     def LDA(self):
-        trainData = self.trainData.copy()
-        testData  = self.testData.copy()
+        trainData = self._trainData.copy()
+        testData  = self._testData.copy()
+        nTestBlock = np.shape(testData)[3]
         W = self._W.copy()
-        del trainData, testData, W
+        temp_X = np.mean(trainData, axis=3)
+        nEvents = self._dataDescription['nEvent']
+        coeffiience = np.zeros([nEvents], np.float32)
+        for test_idx in  range(nEvents * nTestBlock):
+            test_trial = testData[:, :, test_idx, 0]
+            for i, w in enumerate(W):
+                w = w[None, :]
+                test_i = np.dot(w, test_trial)
+                temp_i = np.dot(w, temp_X[:, :, i])
+                coeffiience[i], _ = pearsonr(test_i[0], temp_i[0])
+            label = np.max(np.where(coeffiience == np.max(coeffiience)))
+            print(label, end='\t')
+        print('\n')
+
+        del trainData, testData, W, temp_X
         return 
 
     def classifier(self):
@@ -182,6 +197,7 @@ def unitTest():
     print("eegData shape:\t", np.shape(session._eegData))
     session.SSVEPFilter()
     session.trca1()
+    session.LDA()
     pass
 
 if __name__ == "__main__":
