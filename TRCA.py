@@ -15,7 +15,6 @@ from scipy.io import loadmat, savemat
 from scipy import signal as SIG
 from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
-import mne
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
@@ -67,6 +66,8 @@ class TRCA():
             self._dataDescription['nEvent']   = shape[2]
             self._dataDescription['nTrial']   = shape[2]
             self._dataDescription['nBlock']   = shape[3]
+            self._label = np.arange(0,shape[2],1)
+            print('Labels are defined as:\t', self._label)
         else:
             print('Data was already loaded!')
         del data, dataUse
