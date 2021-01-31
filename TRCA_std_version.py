@@ -14,6 +14,7 @@ from numpy import linalg as LA
 from scipy.io import loadmat, savemat
 from scipy import signal as SIG
 from PearsonStimulation import pearsonCorr, pearsonCorr_int
+import time
 from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 
@@ -57,6 +58,7 @@ class TRCA():
             data = loadmat(filename)['data']
             chnls = np.array([47, 53, 54, 55, 56, 57, 60, 61, 62], np.int32)
             dataUse = data[chnls, :, :, :].copy()
+            dataUse = np.int32(dataUse)
             self._eegData = dataUse.copy()
             # filter
             print('Data was firstly loaded!')
@@ -174,7 +176,7 @@ class TRCA():
         W           = self._W.copy()
         temp_X      = np.mean(trainData, axis=3)
 
-        coefficients = np.zeros([nEvents], np.int16)
+        coefficients = np.zeros([nEvents])
         result      = np.zeros([nEvents * nTestBlock], np.int32)
         for test_idx in  range(nEvents * nTestBlock):
             test_trial = testData[:, :, test_idx, 0]
@@ -182,11 +184,9 @@ class TRCA():
                 w = w[None, :]
                 test_i = np.dot(w, test_trial)
                 temp_i = np.dot(w, temp_X[:, :, i])
-                # print("test_i", test_i.shape)b
-                # print("temp_i", temp_i.shape)
                 coefficients[i], _ = pearsonr(test_i[0], temp_i[0])
-                # print(coefficients[i])
-                # coefficients[i]      = pearsonCorr_int(test_i[0], temp_i[0], precision=32)
+                coefficients[i]      = pearsonCorr(test_i[0], temp_i[0])
+                coefficients[i] = pearsonCorr_int(test_i[0], temp_i[0], precision=32)
 
             # print("Coefficients:\t", coefficients)
             label            = np.max(np.where(coefficients == np.max(coefficients)))
@@ -233,12 +233,10 @@ def unitTest():
     session.output()
     pass
 
-def CVTest(SubNum=None):
+def CVTest(SubNum=None, logfile=None):
     """
     Cross Validation for testing algorithmic ability.
     """
-    logFile = 'CVTest_s2_pearsonCorr_precision_32_corr_1000.log'
-    # log     = open(logFile, 'w')
     if SubNum == None:
         sub = r'./tsing/S2.mat'
     else:
@@ -248,7 +246,7 @@ def CVTest(SubNum=None):
     tUse       = 1.0
     filterType = 0
     print('Subject:%s. Period of data:\t %.2f~%.2fs'% (sub, tBegin+tCut, tBegin+tCut+tUse))
-    # s = 'Subject:%s. Period of data:\t %.2f~%.2fs.\n'% (sub, tBegin+tCut, tBegin+tCut+tUse)
+    s = 'Subject:%s. Period of data:\t %.2f~%.2fs.\n'% (sub, tBegin+tCut, tBegin+tCut+tUse)
 
     session = TRCA(_Subject=6,fs=250)
     session.loadData(filename=sub)
@@ -257,17 +255,17 @@ def CVTest(SubNum=None):
     averAcc = 0.0
     for loop in range(6):
         print('In loop: %d, test set: %d.' % (loop, loop), end=' ')
-        # s = s + 'In loop: %d, test set: %d.' % (loop, loop)
+        s = s + 'In loop: %d, test set: %d.' % (loop, loop)
         session.train(testBlock=loop)
         session.classifier()
         tureNum, accuracy = session.output()
         print("tureNum:%d/%d, accuracy:%.2f%%" % (tureNum, 40, accuracy * 100))
-        # s = s + "tureNum:%d/%d, accuracy:%.2f%%\n" % (tureNum, 40, accuracy * 100)
+        s = s + "tureNum:%d/%d, accuracy:%.2f%%\n" % (tureNum, 40, accuracy * 100)
         averAcc += accuracy
     print("Average accuracy:%.2f%%" % (100 * averAcc / 6))
-    # s = s + "Average accuracy:%.2f%%\n" % (100 * averAcc / 6)
-    # log.write(s)
-    # log.close()
+    s = s + "Average accuracy:%.2f%%\n" % (100 * averAcc / 6)
+    logfile.write(s)
+
     del sub
     return
 
@@ -275,11 +273,18 @@ def allCVTest():
     """
     Do CV by using all data of subjects.
     """
+    logFile = 'allTest_data_int_100'
+    log = open(logFile, 'w')
     SubNum = [1, 2, 4, 6, 7]
     print("================================================================")
+    t1 = time.process_time()
     for subNum in SubNum:
-        CVTest(SubNum=subNum)
+        CVTest(SubNum=subNum, logfile=log)
         print("================================================================")
+    t = time.process_time() - t1
+    s = r'total used time(s): %.2f' % t
+    log.write(s)
+    log.close()
 
 if __name__ == "__main__":
     allCVTest()
