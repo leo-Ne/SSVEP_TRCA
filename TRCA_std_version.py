@@ -13,6 +13,7 @@ import numpy as np
 from numpy import linalg as LA
 from scipy.io import loadmat, savemat
 from scipy import signal as SIG
+from PearsonStimulation import pearsonCorr, pearsonCorr_int
 from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 
@@ -70,6 +71,7 @@ class TRCA():
             print('Labels are defined as:\t', self._label)
         else:
             print('Data was already loaded!')
+        print("Scale of EEG: [%f, %f]\t" % (np.max(dataUse), np.min(dataUse)))
         del data, dataUse
         return
 
@@ -170,9 +172,9 @@ class TRCA():
         testData    = self._testData.copy()
         nTestBlock  = np.shape(testData)[3]
         W           = self._W.copy()
-        temp_X      = np.mean(trainData, axis = 3)
+        temp_X      = np.mean(trainData, axis=3)
 
-        coeffiience = np.zeros([nEvents], np.float32)
+        coefficients = np.zeros([nEvents], np.int16)
         result      = np.zeros([nEvents * nTestBlock], np.int32)
         for test_idx in  range(nEvents * nTestBlock):
             test_trial = testData[:, :, test_idx, 0]
@@ -180,11 +182,16 @@ class TRCA():
                 w = w[None, :]
                 test_i = np.dot(w, test_trial)
                 temp_i = np.dot(w, temp_X[:, :, i])
-                coeffiience[i], _ = pearsonr(test_i[0], temp_i[0])
-            
-            label            = np.max(np.where(coeffiience == np.max(coeffiience)))
+                # print("test_i", test_i.shape)b
+                # print("temp_i", temp_i.shape)
+                coefficients[i], _ = pearsonr(test_i[0], temp_i[0])
+                # print(coefficients[i])
+                # coefficients[i]      = pearsonCorr_int(test_i[0], temp_i[0], precision=32)
+
+            # print("Coefficients:\t", coefficients)
+            label            = np.max(np.where(coefficients == np.max(coefficients)))
             result[test_idx] = label
-        del trainData, nEvents, testData,nTestBlock, W, temp_X, coeffiience, test_trial, test_i, temp_i, label
+        del trainData, nEvents, testData,nTestBlock, W, temp_X, coefficients, test_trial, test_i, temp_i, label
         self._result = result.copy()
         del result
         return 
@@ -230,15 +237,18 @@ def CVTest(SubNum=None):
     """
     Cross Validation for testing algorithmic ability.
     """
+    logFile = 'CVTest_s2_pearsonCorr_precision_32_corr_1000.log'
+    # log     = open(logFile, 'w')
     if SubNum == None:
         sub = r'./tsing/S2.mat'
     else:
         sub = r'./tsing/S'+str(SubNum)+r'.mat'
-    tBegin     = 1.0
+    tBegin     = 2.5
     tCut       = 0.14
     tUse       = 1.0
     filterType = 0
     print('Subject:%s. Period of data:\t %.2f~%.2fs'% (sub, tBegin+tCut, tBegin+tCut+tUse))
+    # s = 'Subject:%s. Period of data:\t %.2f~%.2fs.\n'% (sub, tBegin+tCut, tBegin+tCut+tUse)
 
     session = TRCA(_Subject=6,fs=250)
     session.loadData(filename=sub)
@@ -247,12 +257,17 @@ def CVTest(SubNum=None):
     averAcc = 0.0
     for loop in range(6):
         print('In loop: %d, test set: %d.' % (loop, loop), end=' ')
+        # s = s + 'In loop: %d, test set: %d.' % (loop, loop)
         session.train(testBlock=loop)
         session.classifier()
         tureNum, accuracy = session.output()
         print("tureNum:%d/%d, accuracy:%.2f%%" % (tureNum, 40, accuracy * 100))
+        # s = s + "tureNum:%d/%d, accuracy:%.2f%%\n" % (tureNum, 40, accuracy * 100)
         averAcc += accuracy
     print("Average accuracy:%.2f%%" % (100 * averAcc / 6))
+    # s = s + "Average accuracy:%.2f%%\n" % (100 * averAcc / 6)
+    # log.write(s)
+    # log.close()
     del sub
     return
 
@@ -268,4 +283,5 @@ def allCVTest():
 
 if __name__ == "__main__":
     allCVTest()
+    # CVTest(SubNum=1)
     pass
